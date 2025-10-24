@@ -1,0 +1,149 @@
+# Paket für Kitty-Terminfo installieren
+apt update
+apt install kitty-terminfo -y
+
+# Neuen Benutzer anlegen
+adduser preto
+
+# Benutzer zur sudo-Gruppe hinzufügen
+usermod -aG sudo preto
+
+#ssh zugang für preto
+mkdir -p /home/preto/.ssh
+cp /root/.ssh/authorized_keys /home/preto/.ssh/
+chown -R preto:preto /home/preto/.ssh
+chmod 700 /home/preto/.ssh
+chmod 600 /home/preto/.ssh/authorized_keys
+
+###veruschen mit preto einzulogen ###
+
+# root login blockieren
+sudo nano /etc/ssh/sshd_config
+PermitRootLogin no
+#ssh neu starten
+sudo systemctl restart ssh
+
+#/etc/hosts
+49.13.64.36 debian-8gb-fsn1-1.locale debian-8gb-fsn1-1 #IP aendern und .locale hinzufügen
+### localehost loeschen
+# The following lines are desirable for IPv6 capable hosts
+::1 localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+
+#/etc/apt/sources.list.d/pve-install-repo.sources
+Types: deb
+URIs: http://download.proxmox.com/debian/pve
+Suites: trixie
+Components: pve-no-subscription
+Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
+
+#wget key holen
+sudo wget https://enterprise.proxmox.com/debian/proxmox-archive-keyring-trixie.gpg \
+  -O /usr/share/keyrings/proxmox-archive-keyring.gpg
+
+#update und upgrade
+sudo apt update && sudo apt full-upgrade
+
+#proxmox kernel
+sudo apt install proxmox-default-kernel
+
+#reboot
+sudo systemctl reboot
+
+# ───────────────────────────────
+# 8️⃣ Netzwerk vorbereiten (Hetzner-kompatibel)
+# ───────────────────────────────
+sudo nano /etc/network/interfaces
+
+# Inhalt:
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet manual
+
+auto vmbr0
+iface vmbr0 inet static
+    address 49.13.64.36/32
+    gateway 172.31.1.1
+    bridge-ports eth0
+    bridge-stp off
+    bridge-fd 0
+    up ip route add 172.31.1.1 dev eth0
+    up ip route add default via 172.31.1.1
+    post-up ip addr add 49.13.64.36/32 dev vmbr0
+    post-down ip addr del 49.13.64.36/32 dev vmbr0
+
+iface vmbr0 inet6 auto
+
+# Netzwerk kurz testen
+sudo apt install -y ifupdown2
+sudo ifreload -a
+
+# ───────────────────────────────
+# 9️⃣ Proxmox VE installieren
+# ───────────────────────────────
+# (vorher sicherstellen, dass keine Locks aktiv sind)
+sudo apt install -y psmisc
+sudo rm -f /run/ifupdown2/ifupdown2.lock
+
+# Jetzt eigentliche Installation:
+sudo apt install -y proxmox-ve postfix open-iscsi chrony
+
+# ───────────────────────────────
+# 🔟 Debian-Standard-Kernel entfernen
+# ───────────────────────────────
+sudo apt remove -y linux-image-amd64 'linux-image-6.12*'
+
+# GRUB-Konfiguration aktualisieren (nur falls GRUB benutzt wird)
+sudo update-grub
+
+# ───────────────────────────────
+# 11️⃣ os-prober entfernen (empfohlen)
+# ───────────────────────────────
+sudo apt remove -y os-prober
+
+# ───────────────────────────────
+# 12️⃣ Aufräumen & Neustart
+# ───────────────────────────────
+sudo apt autoremove -y
+sudo systemctl reboot
+
+#root pw
+sudo passwd root
+
+#login ip:8006
+
+#user erstellen
+Links oben: Datacenter → Permissions → Users
+Klick auf Add → User (Add User)
+Trage ein:
+User name: preto
+Realm: PVE authentication server
+Password: (neues Web-Passwort, unabhängig von Linux)
+E-Mail: optional
+Groups: leer lassen (kommt gleich)
+Speichern.
+
+# Admin-Gruppe anlegen und Berechtigung geben
+Im gleichen Menü: Groups → Add
+Group name: admins
+Beschreibung: Administrative group
+Speichern.
+Unter Permissions → Add → Group Permission
+Path: /
+Group: admins
+Role: Administrator
+Speichern.
+Jetzt zurück zu Users → preto@pve → Edit
+Füge admins als Gruppe hinzu.
+Speichern.
+
+# Root in der PVE-Authentifizierung deaktivieren
+pveum user modify root@pam --enable 0
+
+
+
+
+
