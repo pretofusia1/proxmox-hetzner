@@ -1,0 +1,5 @@
+wg-up       # Split-Tunnel aktivieren
+wg-down     # Split-Tunnel stoppen
+wg-full     # Full-Tunnel aktivieren
+wg-fulloff  # Full-Tunnel stoppen
+wg-stat     # Status anzeigen
